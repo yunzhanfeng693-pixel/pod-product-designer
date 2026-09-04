@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  xteam-designer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: xteam-designer
+    ports:
+      - "80:80"
+    restart: unless-stopped
+    networks:
+      - xteam-network
+
+networks:
+  xteam-network:
+    driver: bridge
