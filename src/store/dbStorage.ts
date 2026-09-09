@@ -137,3 +137,27 @@ export const clearDirectoryHandle = async (): Promise<void> => {
     request.onsuccess = () => resolve()
   })
 }
+
+export const saveBackupDirectoryHandle = async (handle: FileSystemDirectoryHandle): Promise<void> => {
+  const db = await getDB()
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite')
+    const request = tx.objectStore(STORE_NAME).put(handle, 'backup-folder-handle')
+    request.onerror = () => reject(request.error)
+    request.onsuccess = () => resolve()
+  })
+}
+
+export const loadBackupDirectoryHandle = async (): Promise<FileSystemDirectoryHandle | null> => {
+  try {
+    const db = await getDB()
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, 'readonly')
+      const request = tx.objectStore(STORE_NAME).get('backup-folder-handle')
+      request.onerror = () => reject(request.error)
+      request.onsuccess = () => resolve(request.result ?? null)
+    })
+  } catch {
+    return null
+  }
+}

@@ -81,7 +81,7 @@ const menuTemplate = [
               <head><title>关于</title><style>body{margin:20px;font-family:Arial;text-align:center;}</style></head>
               <body>
                 <h2>POD产品设计器</h2>
-                <p>版本 1.0.0</p>
+                <p>版本 1.1.0</p>
                 <p>作者：lufan</p>
                 <p>一款专业的T恤设计工具</p>
               </body>
@@ -111,3 +111,4 @@ app.on('window-all-closed', () => {
     app.quit()
   }
 })
+

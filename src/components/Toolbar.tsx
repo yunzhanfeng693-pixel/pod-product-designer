@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import { Save, RotateCw, ZoomIn, ZoomOut, RefreshCw, Image, Layers } from 'lucide-react'
 import { useCompositeStore } from '@/store/compositeStore'
+import DataBackup from '@/components/DataBackup'
 
 const Toolbar = () => {
   const { 
@@ -234,6 +235,7 @@ const Toolbar = () => {
             背面{backTransform.hasDesign ? '✓' : ''}
           </span>
         </div>
+        <DataBackup />
 
         <button
           onClick={() => setShowSaveDialog(true)}
@@ -360,3 +362,5 @@ const Toolbar = () => {
 }
 
 export default Toolbar
+
+
