@@ -1,8 +1,9 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import { Shirt, Design, Position } from '@/types'
+import { Shirt, Design, Position, PromptStyle } from '@/types'
+import { createDefaultPromptStyles } from '@/data/defaultPromptStyles'
 import { indexedDBStorage } from './dbStorage'
-import { mockShirts } from '@/data/mockShirts'
+import { bundledCategories, bundledColors, bundledShirts } from '@/data/bundledData'
 
 interface TransformState {
   position: Position
@@ -33,6 +34,7 @@ interface CompositeStore {
   shirts: Shirt[]
   categories: Category[]
   colors: ColorOption[]
+  promptStyles: PromptStyle[]
   setSelectedShirt: (shirt: Shirt | null) => void
   setFrontDesign: (design: Design | null) => void
   setBackDesign: (design: Design | null) => void
@@ -54,29 +56,16 @@ interface CompositeStore {
   addColor: (color: string, colorName: string) => void
   updateColor: (colorId: string, color: string, colorName: string) => void
   removeColor: (colorId: string) => void
+  addPromptStyle: () => string
+  updatePromptStyle: (styleId: string, updates: Partial<Omit<PromptStyle, 'id' | 'createdAt'>>) => void
+  duplicatePromptStyle: (styleId: string) => string | null
+  removePromptStyle: (styleId: string) => void
+  resetPromptStyles: () => void
 }
 
-const defaultCategories: Category[] = [
-  { id: 'cat_1', name: '圆领' },
-  { id: 'cat_2', name: 'V领' },
-  { id: 'cat_3', name: '运动' },
-  { id: 'cat_4', name: 'Polo' }
-]
-
-const defaultColors: ColorOption[] = [
-  { id: 'color_1', color: '#FFFFFF', colorName: '白色' },
-  { id: 'color_2', color: '#000000', colorName: '黑色' },
-  { id: 'color_3', color: '#FF6B6B', colorName: '红色' },
-  { id: 'color_4', color: '#4ECDC4', colorName: '青色' },
-  { id: 'color_5', color: '#9B59B6', colorName: '紫色' },
-  { id: 'color_6', color: '#3498DB', colorName: '蓝色' },
-  { id: 'color_7', color: '#E74C3C', colorName: '橙色' },
-  { id: 'color_8', color: '#2ECC71', colorName: '绿色' },
-  { id: 'color_9', color: '#F39C12', colorName: '黄色' },
-  { id: 'color_10', color: '#1ABC9C', colorName: '薄荷绿' }
-]
-
-const defaultShirts: Shirt[] = mockShirts
+const defaultCategories: Category[] = bundledCategories
+const defaultColors: ColorOption[] = bundledColors
+const defaultShirts: Shirt[] = bundledShirts
 
 const migrateFromLocalStorage = async () => {
   const oldData = localStorage.getItem('product-composite-storage')
@@ -155,6 +144,7 @@ export const useCompositeStore = create<CompositeStore>()(
       shirts: defaultShirts,
       categories: defaultCategories,
       colors: defaultColors,
+      promptStyles: createDefaultPromptStyles(),
 
       setSelectedShirt: (shirt) => set({ selectedShirt: shirt }),
       setFrontDesign: (design) => {
@@ -250,6 +240,48 @@ export const useCompositeStore = create<CompositeStore>()(
             : state.backTransform
         }))
       },
+      addPromptStyle: () => {
+        const now = new Date().toISOString()
+        const id = `style_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+        set((state) => ({
+          promptStyles: [...state.promptStyles, {
+            id,
+            name: '新提示词风格',
+            corePrompt: '',
+            photographyPrompt: '',
+            shots: [{ id: `shot_${Date.now()}`, title: '主图', prompt: '', order: 1 }],
+            createdAt: now,
+            updatedAt: now
+          }]
+        }))
+        return id
+      },
+      updatePromptStyle: (styleId, updates) => set((state) => ({
+        promptStyles: state.promptStyles.map(style => style.id === styleId
+          ? { ...style, ...updates, updatedAt: new Date().toISOString() }
+          : style)
+      })),
+      duplicatePromptStyle: (styleId) => {
+        const source = get().promptStyles.find(style => style.id === styleId)
+        if (!source) return null
+        const now = new Date().toISOString()
+        const id = `style_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+        set((state) => ({
+          promptStyles: [...state.promptStyles, {
+            ...source,
+            id,
+            name: `${source.name} 副本`,
+            shots: source.shots.map((shot, index) => ({ ...shot, id: `shot_${Date.now()}_${index}` })),
+            createdAt: now,
+            updatedAt: now
+          }]
+        }))
+        return id
+      },
+      removePromptStyle: (styleId) => set((state) => ({
+        promptStyles: state.promptStyles.filter(style => style.id !== styleId)
+      })),
+      resetPromptStyles: () => set({ promptStyles: createDefaultPromptStyles() }),
       addCategory: (name) => set((state) => ({
         categories: [...state.categories, { id: 'cat_' + Date.now(), name }]
       })),
@@ -296,11 +328,39 @@ export const useCompositeStore = create<CompositeStore>()(
     {
       name: 'product-composite-storage',
       storage: createJSONStorage(() => indexedDBStorage),
+      version: 2,
+      migrate: (persistedState: unknown) => {
+        const persisted = (persistedState ?? {}) as Partial<CompositeStore>
+        const existingStyles = Array.isArray(persisted.promptStyles) ? persisted.promptStyles : []
+        const existingShirts = Array.isArray(persisted.shirts) ? persisted.shirts : []
+        const existingCategories = Array.isArray(persisted.categories) ? persisted.categories : []
+        const existingColors = Array.isArray(persisted.colors) ? persisted.colors : []
+        const missingDefaults = createDefaultPromptStyles().filter(
+          defaultStyle => !existingStyles.some(style => style.id === defaultStyle.id)
+        )
+        const missingShirts = bundledShirts.filter(
+          bundledShirt => !existingShirts.some(shirt => shirt.id === bundledShirt.id)
+        )
+        const missingCategories = bundledCategories.filter(
+          category => !existingCategories.some(existing => existing.id === category.id)
+        )
+        const missingColors = bundledColors.filter(
+          color => !existingColors.some(existing => existing.id === color.id)
+        )
+        return {
+          ...persisted,
+          promptStyles: [...existingStyles, ...missingDefaults],
+          shirts: [...existingShirts, ...missingShirts],
+          categories: [...existingCategories, ...missingCategories],
+          colors: [...existingColors, ...missingColors]
+        }
+      },
       partialize: (state) => ({
         shirts: state.shirts,
         savePath: state.savePath,
         categories: state.categories,
         colors: state.colors,
+        promptStyles: state.promptStyles,
         frontDesign: state.frontDesign,
         backDesign: state.backDesign,
         frontTransform: state.frontTransform,

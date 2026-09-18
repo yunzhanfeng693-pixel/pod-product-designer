@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { DatabaseBackup, FolderInput } from 'lucide-react'
 import { useCompositeStore } from '@/store/compositeStore'
 import { loadBackupDirectoryHandle, saveBackupDirectoryHandle } from '@/store/dbStorage'
+import { createDefaultPromptStyles } from '@/data/defaultPromptStyles'
 
 const BACKUP_FOLDER_NAME = 'POD产品设计器备份'
 const BACKUP_FILE_NAME = 'backup.json'
@@ -84,12 +85,13 @@ const DataBackup = () => {
 
       const manifest = {
         format: 'pod-product-designer-backup',
-        version: 1,
+        version: 2,
         exportedAt: new Date().toISOString(),
         data: {
           shirts,
           categories: state.categories,
           colors: state.colors,
+          promptStyles: state.promptStyles,
           frontDesign,
           backDesign,
           frontTransform: state.frontTransform,
@@ -150,6 +152,7 @@ const DataBackup = () => {
         shirts,
         categories: data.categories,
         colors: data.colors,
+        promptStyles: Array.isArray(data.promptStyles) ? data.promptStyles : createDefaultPromptStyles(),
         frontDesign,
         backDesign,
         frontTransform: data.frontTransform,
@@ -193,5 +196,3 @@ const DataBackup = () => {
 }
 
 export default DataBackup
-
-

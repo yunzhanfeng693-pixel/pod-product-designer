@@ -1,5 +1,9 @@
 import { app, BrowserWindow, Menu, shell } from 'electron'
 import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 const isDev = process.env.NODE_ENV === 'development'
 
@@ -14,8 +18,7 @@ function createWindow() {
       nodeIntegration: true,
       contextIsolation: false,
       enableRemoteModule: true
-    },
-    icon: path.join(__dirname, '../public/favicon.ico')
+    }
   })
 
   if (isDev) {
@@ -73,15 +76,14 @@ const menuTemplate = [
             width: 300,
             height: 200,
             title: '关于 POD产品设计器',
-            resizable: false,
-            icon: path.join(__dirname, '../public/favicon.ico')
+            resizable: false
           })
           aboutWindow.loadURL(`data:text/html,
             <html>
               <head><title>关于</title><style>body{margin:20px;font-family:Arial;text-align:center;}</style></head>
               <body>
                 <h2>POD产品设计器</h2>
-                <p>版本 1.1.0</p>
+                <p>版本 1.1.1</p>
                 <p>作者：lufan</p>
                 <p>一款专业的T恤设计工具</p>
               </body>
@@ -111,4 +113,3 @@ app.on('window-all-closed', () => {
     app.quit()
   }
 })
-

@@ -21,6 +21,23 @@ export interface Design {
   height: number
 }
 
+export interface PromptShot {
+  id: string
+  title: string
+  prompt: string
+  order: number
+}
+
+export interface PromptStyle {
+  id: string
+  name: string
+  corePrompt: string
+  photographyPrompt: string
+  shots: PromptShot[]
+  createdAt: string
+  updatedAt: string
+}
+
 export interface CompositeState {
   selectedShirt: Shirt | null
   selectedDesign: Design | null

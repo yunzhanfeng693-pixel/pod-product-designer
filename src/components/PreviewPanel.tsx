@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { Eye, Download, Copy, RefreshCw } from 'lucide-react'
 import { useCompositeStore } from '@/store/compositeStore'
+import { renderCompositeCanvas } from '@/utils/compositeRenderer'
 
 interface PreviewItem {
   url: string
@@ -17,76 +18,20 @@ const PreviewPanel = () => {
   const [backPreview, setBackPreview] = useState<PreviewItem | null>(null)
   const [draggingSide, setDraggingSide] = useState<'front' | 'back' | null>(null)
 
-  const generatePreview = useCallback((side: 'front' | 'back'): Promise<PreviewItem> => {
-    if (!selectedShirt) {
-      return Promise.resolve({ url: '', blob: null, width: 0, height: 0, side, hasDesign: false })
+  const generatePreview = useCallback(async (side: 'front' | 'back'): Promise<PreviewItem> => {
+    if (!selectedShirt) return { url: '', blob: null, width: 0, height: 0, side, hasDesign: false }
+    const transform = side === 'front' ? frontTransform : backTransform
+    const design = side === 'front' ? frontDesign : backDesign
+    try {
+      const canvas = await renderCompositeCanvas(selectedShirt, design, transform, side)
+      const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png', 1))
+      const url = blob ? URL.createObjectURL(blob) : canvas.toDataURL('image/png', 1)
+      return { url, blob, width: canvas.width, height: canvas.height, side, hasDesign: transform.hasDesign }
+    } catch (error) {
+      console.error('生成合成预览失败:', error)
+      return { url: '', blob: null, width: 0, height: 0, side, hasDesign: transform.hasDesign }
     }
-
-    return new Promise<PreviewItem>((resolve) => {
-      const canvas = document.createElement('canvas')
-      const ctx = canvas.getContext('2d')
-      if (!ctx) {
-        resolve({ url: '', blob: null, width: 0, height: 0, side, hasDesign: false })
-        return
-      }
-
-      const shirtImg = new Image()
-      shirtImg.crossOrigin = 'anonymous'
-      shirtImg.onload = () => {
-        canvas.width = shirtImg.width
-        canvas.height = shirtImg.height
-        
-        ctx.drawImage(shirtImg, 0, 0)
-
-        const transform = side === 'front' ? frontTransform : backTransform
-        const design = side === 'front' ? frontDesign : backDesign
-
-        const drawDesignAndResolve = () => {
-          canvas.toBlob((blob) => {
-            if (blob) {
-              const url = URL.createObjectURL(blob)
-              resolve({ url, blob, width: shirtImg.width, height: shirtImg.height, side, hasDesign: transform.hasDesign })
-            } else {
-              const url = canvas.toDataURL('image/png', 1.0)
-              resolve({ url, blob: null, width: shirtImg.width, height: shirtImg.height, side, hasDesign: transform.hasDesign })
-            }
-          }, 'image/png', 1.0)
-        }
-
-        if (design && transform.hasDesign) {
-          const designImg = new Image()
-          designImg.onload = () => {
-            const centerX = shirtImg.width / 2 + transform.position.x
-            const centerY = shirtImg.height / 2 + transform.position.y
-
-            ctx.save()
-            ctx.translate(centerX, centerY)
-            ctx.rotate((transform.rotation * Math.PI) / 180)
-            ctx.scale(transform.scale, transform.scale)
-            
-            const origWidth = design.width
-            const origHeight = design.height
-            
-            ctx.drawImage(
-              designImg,
-              -origWidth / 2,
-              -origHeight / 2,
-              origWidth,
-              origHeight
-            )
-            ctx.restore()
-
-            drawDesignAndResolve()
-          }
-          designImg.src = design.imageData
-        } else {
-          drawDesignAndResolve()
-        }
-      }
-      shirtImg.src = side === 'front' ? selectedShirt.frontImage : selectedShirt.backImage
-    })
   }, [selectedShirt, frontDesign, backDesign, frontTransform, backTransform])
-
   useEffect(() => {
     const updatePreviews = async () => {
       if (selectedShirt) {

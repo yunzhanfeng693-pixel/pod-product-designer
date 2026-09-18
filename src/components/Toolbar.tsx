@@ -1,7 +1,9 @@
 import { useState, useCallback } from 'react'
-import { Save, RotateCw, ZoomIn, ZoomOut, RefreshCw, Image, Layers } from 'lucide-react'
+import { Save, RotateCw, ZoomIn, ZoomOut, RefreshCw, Image, Layers, Sparkles } from 'lucide-react'
 import { useCompositeStore } from '@/store/compositeStore'
 import DataBackup from '@/components/DataBackup'
+import PromptBatchModal from '@/components/PromptBatchModal'
+import { renderCompositeDataUrl } from '@/utils/compositeRenderer'
 
 const Toolbar = () => {
   const { 
@@ -22,81 +24,24 @@ const Toolbar = () => {
   const designRotation = currentTransform.rotation
   
   const [showSaveDialog, setShowSaveDialog] = useState(false)
+  const [showPromptBatch, setShowPromptBatch] = useState(false)
   const [saveProgress, setSaveProgress] = useState(0)
   const [isSaving, setIsSaving] = useState(false)
   const [saveAllColors, setSaveAllColors] = useState(false)
   const [saveFront, setSaveFront] = useState(true)
   const [saveBack, setSaveBack] = useState(true)
 
-  const renderImage = useCallback((shirt: typeof selectedShirt, side: 'front' | 'back') => {
-    return new Promise<string>((resolve) => {
-      const design = side === 'front' ? frontDesign : backDesign
-      if (!shirt || !design) {
-        resolve('')
-        return
-      }
-
-      const canvas = document.createElement('canvas')
-      const ctx = canvas.getContext('2d')
-      if (!ctx) {
-        resolve('')
-        return
-      }
-
-      const shirtImg = document.createElement('img')
-      shirtImg.crossOrigin = 'anonymous'
-      shirtImg.onload = () => {
-        canvas.width = shirtImg.width
-        canvas.height = shirtImg.height
-        
-        ctx.drawImage(shirtImg, 0, 0)
-
-        const designImg = document.createElement('img')
-        designImg.onload = () => {
-          const transform = side === 'front' ? frontTransform : backTransform
-          
-          if (!transform.hasDesign) {
-            resolve(canvas.toDataURL('image/png', 1.0))
-            return
-          }
-
-          const displayScale = Math.min(
-            canvas.width / shirtImg.width,
-            canvas.height / shirtImg.height,
-            1
-          )
-          
-          const positionScaleX = canvas.width / (shirtImg.width * displayScale)
-          const positionScaleY = canvas.height / (shirtImg.height * displayScale)
-
-          const centerX = canvas.width / 2 + transform.position.x * positionScaleX
-          const centerY = canvas.height / 2 + transform.position.y * positionScaleY
-
-          ctx.save()
-          ctx.translate(centerX, centerY)
-          ctx.rotate((transform.rotation * Math.PI) / 180)
-          ctx.scale(transform.scale, transform.scale)
-          
-          const origWidth = design.width
-          const origHeight = design.height
-          
-          ctx.drawImage(
-            designImg,
-            -origWidth / 2,
-            -origHeight / 2,
-            origWidth,
-            origHeight
-          )
-          ctx.restore()
-
-          resolve(canvas.toDataURL('image/png', 1.0))
-        }
-        designImg.src = design.imageData
-      }
-      shirtImg.src = side === 'front' ? shirt.frontImage : shirt.backImage
-    })
+  const renderImage = useCallback(async (shirt: typeof selectedShirt, side: 'front' | 'back') => {
+    const design = side === 'front' ? frontDesign : backDesign
+    const transform = side === 'front' ? frontTransform : backTransform
+    if (!shirt || !design) return ''
+    try {
+      return await renderCompositeDataUrl(shirt, design, transform, side)
+    } catch (error) {
+      console.error('生成保存图片失败:', error)
+      return ''
+    }
   }, [frontDesign, backDesign, frontTransform, backTransform])
-
   const handleSave = useCallback(async () => {
     if (!selectedShirt) return
 
@@ -235,6 +180,15 @@ const Toolbar = () => {
             背面{backTransform.hasDesign ? '✓' : ''}
           </span>
         </div>
+        <button
+          onClick={() => setShowPromptBatch(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors font-medium disabled:bg-gray-300 disabled:cursor-not-allowed"
+          title={!selectedShirt ? '请先选择基板' : '创建批量裂变生图任务包'}
+        >
+          <Sparkles className="w-5 h-5" />
+          批量裂变
+        </button>
+
         <DataBackup />
 
         <button
@@ -246,6 +200,11 @@ const Toolbar = () => {
           {isSaving ? '保存中...' : '快速保存'}
         </button>
       </div>
+
+      <PromptBatchModal
+        isOpen={showPromptBatch}
+        onClose={() => setShowPromptBatch(false)}
+      />
 
       {showSaveDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -362,5 +321,3 @@ const Toolbar = () => {
 }
 
 export default Toolbar
-
-
