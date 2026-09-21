@@ -26,7 +26,7 @@ function App() {
       </header>
 
       <main className="flex-1 flex overflow-hidden p-4 gap-0">
-        <ResizablePanel defaultWidth={256} minWidth={150} maxWidth={400}>
+        <ResizablePanel defaultWidth={256} minWidth={150} maxWidth={400} storageKey="pod:shirt-library-width">
           <ShirtLibrary />
         </ResizablePanel>
 
@@ -35,11 +35,11 @@ function App() {
           <Toolbar />
         </div>
 
-        <ResizablePanel defaultWidth={224} minWidth={150} maxWidth={800} handleSide="left">
+        <ResizablePanel defaultWidth={224} minWidth={150} maxWidth={800} handleSide="left" storageKey="pod:design-library-width">
           <DesignUploader />
         </ResizablePanel>
         
-        <ResizablePanel defaultWidth={240} minWidth={150} maxWidth={350} handleSide="left">
+        <ResizablePanel defaultWidth={240} minWidth={150} maxWidth={350} handleSide="left" storageKey="pod:preview-panel-width">
           <PreviewPanel />
         </ResizablePanel>
       </main>

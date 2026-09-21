@@ -3,6 +3,7 @@ import { Upload, X, ImageIcon, FolderOpen } from 'lucide-react'
 import { Design } from '@/types'
 import { useCompositeStore } from '@/store/compositeStore'
 import { saveDirectoryHandle, loadDirectoryHandle, clearDirectoryHandle } from '@/store/dbStorage'
+import { chooseDesktopDesignFolder, clearDesktopDesignFolder, getDesktopDesignFolder, isDesktopDesignLibraryAvailable, type DesktopDesignFile } from '@/utils/designLibrary'
 
 interface ThumbItem {
   file: File
@@ -16,7 +17,10 @@ const DesignUploader = () => {
   const [error, setError] = useState('')
   const [folderItems, setFolderItems] = useState<ThumbItem[]>([])
   const [folderPath, setFolderPath] = useState('')
-  const [topPaneHeight, setTopPaneHeight] = useState<number | null>(null)
+  const [topPaneHeight, setTopPaneHeight] = useState<number | null>(() => {
+    const saved = Number(window.localStorage.getItem('pod:design-library-top-height'))
+    return Number.isFinite(saved) && saved > 0 ? saved : null
+  })
   const thumbCanvasRef = useRef<HTMLCanvasElement>(null)
   const splitContainerRef = useRef<HTMLDivElement>(null)
   const topPaneRef = useRef<HTMLDivElement>(null)
@@ -27,25 +31,22 @@ const DesignUploader = () => {
   const currentDesign = currentSide === 'front' ? frontDesign : backDesign
   const setCurrentDesign = currentSide === 'front' ? setFrontDesign : setBackDesign
 
+  const loadImageAsDesign = useCallback((name: string, imageData: string) => {
+    const img = new Image()
+    img.onload = () => {
+      const design: Design = { id: Date.now().toString(), name, imageData, width: img.width, height: img.height }
+      setCurrentDesign(design)
+      setError('')
+    }
+    img.onerror = () => setError('图片读取失败，请重新刷新素材库。')
+    img.src = imageData
+  }, [setCurrentDesign])
+
   const loadFileAsDesign = useCallback((file: File) => {
     const reader = new FileReader()
-    reader.onload = (e) => {
-      const img = new Image()
-      img.onload = () => {
-        const design: Design = {
-          id: Date.now().toString(),
-          name: file.name,
-          imageData: e.target?.result as string,
-          width: img.width,
-          height: img.height
-        }
-        setCurrentDesign(design)
-        setError('')
-      }
-      img.src = e.target?.result as string
-    }
+    reader.onload = (e) => loadImageAsDesign(file.name, e.target?.result as string)
     reader.readAsDataURL(file)
-  }, [setCurrentDesign])
+  }, [loadImageAsDesign])
 
   const handleFile = useCallback((file: File) => {
     if (!file.type.startsWith('image/')) {
@@ -156,7 +157,48 @@ const DesignUploader = () => {
     }
   }, [generateThumb])
 
+  const createDesktopItems = useCallback(async (files: DesktopDesignFile[]) => {
+    const items = await Promise.all(files.map(async ({ name, dataUrl }) => {
+      const blob = await (await fetch(dataUrl)).blob()
+      const file = new File([blob], name, { type: 'image/png' })
+      const thumbUrl = await generateThumb(file)
+      return thumbUrl ? { file, thumbUrl, name } : null
+    }))
+    return items.filter((item): item is ThumbItem => item !== null)
+  }, [generateThumb])
+
+  const applyDesktopFolder = useCallback(async (result: { folderPath?: string; folderName?: string; files: DesktopDesignFile[] }, appendOnly: boolean) => {
+    if (!result.folderPath) return
+    setFolderPath(result.folderName || result.folderPath)
+    const incoming = appendOnly ? result.files.filter(item => !knownFileNamesRef.current.has(item.name)) : result.files
+    if (incoming.length === 0) return
+    incoming.forEach(item => knownFileNamesRef.current.add(item.name))
+    const items = await createDesktopItems(incoming)
+    if (appendOnly) setFolderItems(existing => [...existing, ...items])
+    else setFolderItems(items)
+  }, [createDesktopItems])
+
+  const restoreDesktopFolder = useCallback(async () => {
+    const result = await getDesktopDesignFolder()
+    if (result?.folderPath) {
+      knownFileNamesRef.current.clear()
+      await applyDesktopFolder(result, false)
+    }
+  }, [applyDesktopFolder])
+
+  const refreshDesktopFolder = useCallback(async () => {
+    const result = await getDesktopDesignFolder(Array.from(knownFileNamesRef.current))
+    if (result?.folderPath) await applyDesktopFolder(result, true)
+  }, [applyDesktopFolder])
   const handleFolderSelect = useCallback(async () => {
+    if (isDesktopDesignLibraryAvailable()) {
+      const result = await chooseDesktopDesignFolder()
+      if (result && !result.canceled && result.folderPath) {
+        knownFileNamesRef.current.clear()
+        await applyDesktopFolder(result, false)
+      }
+      return
+    }
     try {
       const dirHandle = await (window as any).showDirectoryPicker()
       if (!dirHandle) return
@@ -186,14 +228,15 @@ const DesignUploader = () => {
       }
       input.click()
     }
-  }, [generateThumb, loadFolder])
+  }, [applyDesktopFolder, generateThumb, loadFolder])
 
   const handleClearFolder = useCallback(async () => {
     directoryHandleRef.current = null
     knownFileNamesRef.current.clear()
     setFolderItems([])
     setFolderPath('')
-    await clearDirectoryHandle()
+    if (isDesktopDesignLibraryAvailable()) await clearDesktopDesignFolder()
+    else await clearDirectoryHandle()
   }, [])
 
   const handleThumbnailClick = useCallback((item: ThumbItem) => {
@@ -270,6 +313,23 @@ const DesignUploader = () => {
   }, [])
 
   useEffect(() => {
+    if (topPaneHeight !== null) window.localStorage.setItem('pod:design-library-top-height', String(topPaneHeight))
+  }, [topPaneHeight])
+
+  useEffect(() => {
+    const clampHeight = () => {
+      const container = splitContainerRef.current
+      if (!container || topPaneHeight === null) return
+      const maxHeight = Math.max(120, container.clientHeight - 130)
+      if (topPaneHeight > maxHeight) setTopPaneHeight(maxHeight)
+    }
+    clampHeight()
+    window.addEventListener('resize', clampHeight)
+    return () => window.removeEventListener('resize', clampHeight)
+  }, [topPaneHeight])
+
+
+  useEffect(() => {
     return () => {
       folderItems.forEach(item => {
         if (item.thumbUrl.startsWith('blob:')) {
@@ -280,6 +340,10 @@ const DesignUploader = () => {
   }, [folderItems])
 
   useEffect(() => {
+    if (isDesktopDesignLibraryAvailable()) {
+      void restoreDesktopFolder()
+      return
+    }
     const restoreFolder = async () => {
       const handle = await loadDirectoryHandle()
       if (handle) {
@@ -295,14 +359,15 @@ const DesignUploader = () => {
       }
     }
     restoreFolder()
-  }, [loadFolder])
+  }, [loadFolder, restoreDesktopFolder])
 
   useEffect(() => {
     const interval = window.setInterval(() => {
-      void refreshFolder()
+      if (isDesktopDesignLibraryAvailable()) void refreshDesktopFolder()
+      else void refreshFolder()
     }, 3000)
     return () => window.clearInterval(interval)
-  }, [refreshFolder])
+  }, [refreshDesktopFolder, refreshFolder])
 
   return (
     <div className="h-full flex flex-col bg-white rounded-lg shadow-sm">

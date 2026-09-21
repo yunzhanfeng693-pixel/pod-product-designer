@@ -1,0 +1,30 @@
+import { spawn } from 'node:child_process';
+import { existsSync, mkdirSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+export class ExternalAiRelay {
+ constructor({workerPath=fileURLToPath(new URL('./worker.mjs',import.meta.url)),runtimePath=process.execPath,timeoutMs=35000,dataRoot=resolve('relay-data')}={}){this.workerPath=resolve(workerPath);this.runtimePath=runtimePath;this.timeoutMs=timeoutMs;this.dataRoot=resolve(dataRoot);this.windowLocks=new Map();this.lastLaunchAt=0;}
+ newConversationUrl(value){const text=String(value||'').trim();if(!/^https:\/\/www\.doubao\.com\/chat(?:\/[^?#]*)?(?:[?#].*)?$/.test(text))throw new Error('只允许豆包聊天页。');return 'https://www.doubao.com/chat/'} async #run(payload){
+  const runTimeout=Number(payload.timeout_ms)||this.timeoutMs,maxBuffer=64*1024*1024;
+  return new Promise((resolveRun,rejectRun)=>{
+   const child=spawn(this.runtimePath,[this.workerPath],{windowsHide:true,stdio:['pipe','pipe','pipe'],env:{...process.env,ELECTRON_RUN_AS_NODE:'1'}}),chunks=[],errors=[];let size=0,settled=false;
+   const uncertainPhase=payload.action==='send'?'after_click':'retrieve';
+   const finishError=(error,phase=uncertainPhase)=>{if(settled)return;settled=true;clearTimeout(timer);try{child.kill()}catch{}rejectRun(Object.assign(error instanceof Error?error:new Error(String(error)),{phase}))};
+   const parentDeadline=runTimeout+1000,timer=setTimeout(()=>finishError(new Error(`豆包传递程序超过 ${parentDeadline}ms 未返回；发送状态需要核实。`)),parentDeadline);
+   child.stdout.on('data',chunk=>{size+=chunk.length;if(size>maxBuffer)return finishError(new Error('豆包传递程序返回内容超过限制。'));chunks.push(chunk)});
+   child.stderr.on('data',chunk=>errors.push(chunk));
+   child.on('error',error=>finishError(error));
+   child.on('close',()=>{if(settled)return;clearTimeout(timer);let result;const stdout=Buffer.concat(chunks).toString('utf8').trim(),stderr=Buffer.concat(errors).toString('utf8').trim();try{result=JSON.parse(stdout)}catch{return finishError(new Error(stderr||stdout||'豆包传递程序没有返回可识别结果'))}if(result.status==='ERROR')return finishError(new Error(result.message),result.phase||uncertainPhase);settled=true;resolveRun(result)});
+   child.stdin.on('error',error=>finishError(error));
+   child.stdin.end(JSON.stringify({...payload,timeout_ms:runTimeout}));
+  });
+ }
+ async #sessionReady({debug_endpoint,session_url}){try{const response=await fetch(new URL('/json',debug_endpoint),{signal:AbortSignal.timeout(800)});if(!response.ok)return false;const expected=new URL(session_url),key=url=>{const parsed=new URL(url);return parsed.origin+parsed.pathname.replace(/\/$/,'')};const targets=await response.json();return Array.isArray(targets)&&targets.some(target=>target.type==='page'&&key(target.url)===key(expected))}catch{return false}}
+ async #browserPresent(debugEndpoint){try{const response=await fetch(new URL('/json/list',debugEndpoint),{signal:AbortSignal.timeout(2000)});return response.ok?{connected:true,pages:(await response.json()).filter(target=>target.type==='page')}:null}catch{return null}}
+ async withWindow(windowKey,work){const key=String(windowKey||'global'),previous=this.windowLocks.get(key)||Promise.resolve();let release;const gate=new Promise(done=>release=done),queued=previous.then(()=>gate);this.windowLocks.set(key,queued);await previous;try{return await work()}finally{release();if(this.windowLocks.get(key)===queued)this.windowLocks.delete(key)}}
+ async ensureBrowser(options){return this.withWindow('__browser_start__',async()=>{const present=await this.#browserPresent(options.debug_endpoint);if(present){if(options.window_key){const opened=await this.#run({...options,action:'open',timeout_ms:30000});if(opened.status==='READY')return{started:false,reused_window:!opened.created_project_page,created_project_page:Boolean(opened.created_project_page),debug_endpoint:options.debug_endpoint,session_url:opened.session_url||options.session_url,window_name:options.window_name};throw new Error('受控浏览器已运行，但当前项目窗口无法建立；请检查登录或人机验证页面后再试。')}if(await this.#sessionReady(options))return{started:false,already_running:true,debug_endpoint:options.debug_endpoint,session_url:options.session_url};throw new Error('受控浏览器已运行，但目标对话未就绪；已暂停自动开窗。')}if(Date.now()-this.lastLaunchAt<60000)throw new Error('浏览器刚启动过但尚未就绪；60秒内不会再次自动开窗，请先检查登录或验证页面。');this.lastLaunchAt=Date.now();const receipt=this.startBrowser(options),deadline=Date.now()+10000;while(Date.now()<deadline){await new Promise(done=>setTimeout(done,500));const available=await this.#browserPresent(options.debug_endpoint);if(!available)continue;if(options.window_key){const opened=await this.#run({...options,action:'open',timeout_ms:30000});if(opened.status==='READY')return{...receipt,session_url:opened.session_url||receipt.session_url,created_project_page:Boolean(opened.created_project_page)};throw new Error('浏览器已启动，但当前项目窗口无法建立；请检查登录或人机验证页面后再试。')}if(await this.#sessionReady(options))return receipt}throw new Error('浏览器启动后未就绪；已暂停自动开窗，请检查现有窗口，不会连续重试。')})}
+ startBrowser({session_url,debug_endpoint,window_name=''}){const port=new URL(debug_endpoint).port,candidates=[process.env.XUXIA_GPT_BROWSER,'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe','C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe','C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'].filter(Boolean),browser=candidates.find(existsSync);if(!browser)throw new Error('没有找到 Chrome 或 Edge；可通过 XUXIA_GPT_BROWSER 指定浏览器。');const profile=join(this.dataRoot,'doubao-browser-profile');mkdirSync(profile,{recursive:true});const child=spawn(browser,[`--remote-debugging-port=${port}`,`--user-data-dir=${profile}`,'--no-first-run','--new-window',session_url||'https://www.doubao.com/chat/'],{detached:true,stdio:'ignore',windowsHide:false});child.unref();return {started:true,browser,profile,debug_endpoint,session_url,window_name};}
+ async send(options){return this.#run({...options,action:'send'});}
+ async retrieve(options){return this.#run({...options,action:'retrieve'});}
+}

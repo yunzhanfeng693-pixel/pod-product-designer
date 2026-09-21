@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 
 interface ResizablePanelProps {
   children: React.ReactNode
@@ -7,6 +7,7 @@ interface ResizablePanelProps {
   maxWidth?: number
   handleSide?: 'left' | 'right'
   onResize?: (width: number) => void
+  storageKey?: string
 }
 
 export default function ResizablePanel({ 
@@ -15,11 +16,20 @@ export default function ResizablePanel({
   minWidth = 120, 
   maxWidth = 500,
   handleSide = 'right',
-  onResize 
+  onResize,
+  storageKey
 }: ResizablePanelProps) {
-  const [width, setWidth] = useState(defaultWidth)
+  const [width, setWidth] = useState(() => {
+    if (!storageKey) return defaultWidth
+    const saved = Number(window.localStorage.getItem(storageKey))
+    return Number.isFinite(saved) ? Math.max(minWidth, Math.min(maxWidth, saved)) : defaultWidth
+  })
   const [isDragging, setIsDragging] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (storageKey) window.localStorage.setItem(storageKey, String(width))
+  }, [storageKey, width])
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
