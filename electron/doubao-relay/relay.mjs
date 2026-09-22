@@ -11,7 +11,7 @@ export class ExternalAiRelay {
    const child=spawn(this.runtimePath,[this.workerPath],{windowsHide:true,stdio:['pipe','pipe','pipe'],env:{...process.env,ELECTRON_RUN_AS_NODE:'1'}}),chunks=[],errors=[];let size=0,settled=false;
    const uncertainPhase=payload.action==='send'?'after_click':'retrieve';
    const finishError=(error,phase=uncertainPhase)=>{if(settled)return;settled=true;clearTimeout(timer);try{child.kill()}catch{}rejectRun(Object.assign(error instanceof Error?error:new Error(String(error)),{phase}))};
-   const parentDeadline=payload.action==='send'?runTimeout*3+5000:runTimeout+1000,timer=setTimeout(()=>finishError(new Error(`豆包传递程序超过 ${parentDeadline}ms 未返回；发送状态需要核实。`)),parentDeadline);
+   const uploadCount=Array.isArray(payload.image_paths)?payload.image_paths.length:0;const parentDeadline=payload.action==='send'?runTimeout*(uploadCount+2)+5000:runTimeout+1000,timer=setTimeout(()=>finishError(new Error(`豆包传递程序超过 ${parentDeadline}ms 未返回；发送状态需要核实。`)),parentDeadline);
    child.stdout.on('data',chunk=>{size+=chunk.length;if(size>maxBuffer)return finishError(new Error('豆包传递程序返回内容超过限制。'));chunks.push(chunk)});
    child.stderr.on('data',chunk=>errors.push(chunk));
    child.on('error',error=>finishError(error));

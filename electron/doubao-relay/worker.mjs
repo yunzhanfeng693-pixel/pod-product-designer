@@ -37,12 +37,20 @@ try{
   const files=Array.isArray(input.image_paths)?input.image_paths:[];let deadline=Date.now()+timeout;
   const inputRoot=page.locator('.guidance-input-surface').last();
   if(files.length){
-      // Do not remove existing thumbnails here: Doubao re-renders this area during upload and the old delete click could stall before the product image was uploaded.
-   const upload=inputRoot.locator('input[type="file"]').first();if(!await upload.count()){output({status:'ERROR',phase:'before_send',message:'找不到豆包图片上传入口；请在豆包窗口手动处理。'});process.exit(0)}
-   await upload.setInputFiles(files);
-   const uploadReady=async()=>{let named=true;for(const file of files){const card=inputRoot.getByRole('button',{name:basename(file),exact:true});if(!await card.count()||!await card.last().isVisible()){named=false;break}}if(named)return true;const previews=inputRoot.locator('[role="button"][aria-label^="reference-"]');let visible=0;for(let i=0;i<await previews.count();i++)if(await previews.nth(i).isVisible())visible++;return visible>=files.length};
-   while(Date.now()<deadline){if(await uploadReady())break;await page.waitForTimeout(250)}
-   if(!await uploadReady()){output({status:'ERROR',phase:'before_send',message:'参考图上传超时，尚未写入提示词或自动发送；请确认模特图和平铺衣服图都出现后重试。'});process.exit(0)}
+   // Doubao currently exposes a single-file picker in some accounts. Upload one reference at a time,
+   // and wait for its thumbnail before selecting the next one.
+   const visiblePreviewCount=async()=>{const previews=inputRoot.locator('[role="button"][aria-label^="reference-"]');let visible=0;for(let i=0;i<await previews.count();i++)if(await previews.nth(i).isVisible())visible++;return visible};
+   const hasNamedPreview=async file=>{const card=inputRoot.getByRole('button',{name:basename(file),exact:true});return await card.count()>0&&await card.last().isVisible()};
+   for(const file of files){
+    const previewsBefore=await visiblePreviewCount();
+    const upload=inputRoot.locator('input[type="file"]').first();
+    if(!await upload.count()){output({status:'ERROR',phase:'before_send',message:`上传 ${basename(file)} 时找不到豆包图片上传入口；请刷新豆包窗口后重试。`});process.exit(0)}
+    await upload.setInputFiles(file);
+    const fileDeadline=Date.now()+timeout;
+    let uploaded=false;
+    while(Date.now()<fileDeadline&&!uploaded){uploaded=await hasNamedPreview(file)||await visiblePreviewCount()>previewsBefore;if(!uploaded)await page.waitForTimeout(250)}
+    if(!uploaded){output({status:'ERROR',phase:'before_send',message:`${basename(file)} 上传超时；尚未写入提示词或自动发送。请确认该图在豆包输入框内出现后重试。`});process.exit(0)}
+   }
   }
   deadline=Date.now()+timeout;
   // Fill the prompt only after every reference image is present, so a slow upload cannot leave a half-sent task.
