@@ -1,4 +1,4 @@
-export type GptReferenceSide = 'front' | 'back'
+export type GptReferenceSide = 'front' | 'back' | 'model'
 
 export interface GptReferenceImage {
   side: GptReferenceSide
@@ -31,12 +31,18 @@ export const openGptRelay = async () => {
   return ipcRenderer.invoke('gpt:open')
 }
 
-export const sendGptTasks = async (payload: {
+export type GptSendPayload = {
   shirtId: string
   shirtName: string
+  patternKey?: string
   images: GptReferenceImage[]
   tasks: GptSelectedTask[]
-}) => {
+  taskKind?: 'suite' | 'model-anchor'
+  modelLocked?: boolean
+  modelGender?: 'male' | 'female' | ''
+}
+
+export const sendGptTasks = async (payload: GptSendPayload) => {
   const ipcRenderer = getIpcRenderer()
   if (!ipcRenderer) throw new Error('豆包自动发送仅支持桌面版程序。')
   return ipcRenderer.invoke('gpt:send-tasks', payload) as Promise<Array<{
@@ -45,6 +51,29 @@ export const sendGptTasks = async (payload: {
     status: 'SENT' | 'DRAFT' | 'NEEDS_ATTENTION'
     error?: string
   }>>
+}
+export const queueGptTasks = async (payload: GptSendPayload) => {
+  const ipcRenderer = getIpcRenderer()
+  if (!ipcRenderer) throw new Error('豆包任务队列仅支持桌面版程序。')
+  return ipcRenderer.invoke('gpt:queue-tasks', payload) as Promise<Array<{ requestId: string; title: string; status: 'QUEUED'; error?: string }>>
+}
+
+export const cancelQueuedGptTask = async (requestId: string) => {
+  const ipcRenderer = getIpcRenderer()
+  if (!ipcRenderer) throw new Error('豆包任务队列仅支持桌面版程序。')
+  return ipcRenderer.invoke('gpt:cancel-queued-task', requestId)
+}
+
+export const resolveGptQueueBlocker = async (requestId: string, action: 'wait' | 'skip') => {
+  const ipcRenderer = getIpcRenderer()
+  if (!ipcRenderer) throw new Error('豆包任务队列仅支持桌面版程序。')
+  return ipcRenderer.invoke('gpt:resolve-queue-blocker', { requestId, action })
+}
+
+export const deleteGptTask = async (requestId: string) => {
+  const ipcRenderer = getIpcRenderer()
+  if (!ipcRenderer) throw new Error('豆包任务记录仅支持桌面版程序。')
+  return ipcRenderer.invoke('gpt:delete-task', requestId)
 }
 export const getGptSettings = async () => {
   const ipcRenderer = getIpcRenderer()
@@ -67,7 +96,11 @@ export interface GptTaskRecord {
   title: string
   shirtName: string
   sides: Array<'front' | 'back'>
-  status: 'SEND_PENDING' | 'SENT' | 'DRAFT' | 'NEEDS_ATTENTION' | 'RETRIEVED'
+  taskKind: 'suite' | 'model-anchor'
+  queuePosition?: number
+  expectedCount: number
+  modelReferencePath?: string
+  status: 'QUEUED' | 'SEND_PENDING' | 'SENT' | 'DRAFT' | 'NEEDS_ATTENTION' | 'RETRIEVED' | 'CANCELLED'
   createdAt: string
   sentAt?: string
   retrievedAt?: string
@@ -87,4 +120,9 @@ export const openGptResult = async (requestId: string) => {
   const ipcRenderer = getIpcRenderer()
   if (!ipcRenderer) throw new Error('结果文件夹仅支持桌面版程序。')
   return ipcRenderer.invoke('gpt:open-result', requestId)
+}
+export const getGeneratedModelReference = async (requestId: string) => {
+  const ipcRenderer = getIpcRenderer()
+  if (!ipcRenderer) throw new Error('模特参考图仅支持桌面版程序。')
+  return ipcRenderer.invoke('gpt:get-model-reference', requestId) as Promise<{ dataUrl: string; name: string }>
 }

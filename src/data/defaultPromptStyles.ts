@@ -1,3 +1,4 @@
+import { normalizePromptStyle } from '@/utils/promptStyleNormalization'
 import { PromptStyle } from '@/types'
 import { createDocumentPromptStyles } from '@/data/documentPromptStyles'
 
@@ -24,7 +25,7 @@ export const createDefaultPromptStyles = (): PromptStyle[] => {
       },
       {
         id: 'shot_detail', order: 2, title: '细节特写（面料与图案凸显）',
-        prompt: 'A medium close-up shot focusing on the chest of a model wearing an oversized heavyweight cotton tee, occupying 80% of the frame. Extremely sharp detail on the snug tight crewneck and the un-distorted graphic on the chest. Utilizing natural side lighting from a minimalist birthday party environment to accentuate the thick and heavy texture of the fabric. Pure, clean background, 35mm film grain.'
+        prompt: 'A medium close-up shot focusing on the garment surface shown in the product reference, occupying 80% of the frame. Extremely sharp detail on the snug tight crewneck and the un-distorted referenced artwork. Utilizing natural side lighting from a minimalist birthday party environment to accentuate the thick and heavy texture of the fabric. Pure, clean background, 35mm film grain.'
       },
       {
         id: 'shot_lifestyle', order: 3, title: '生活化场景（UGC 视角放松动作）',
@@ -32,7 +33,7 @@ export const createDefaultPromptStyles = (): PromptStyle[] => {
       },
       {
         id: 'shot_side', order: 4, title: '侧面/氛围感（线条与版型展现）',
-        prompt: "A premium fashion editorial portrait. The model's body is angled at 45 degrees, showcasing the structured dropshoulder lines and heavy drape of the oversized heavyweight cotton tee from the side, with the graphic flowing naturally. The background is an extremely clean, solid-colored wall in a minimalist, stylish party setting, high-end commercial campaign vibe, 35mm film grain."
+        prompt: "A premium fashion editorial portrait. The model's body is angled at 45 degrees, showcasing the structured dropshoulder lines and heavy drape of the oversized heavyweight cotton tee from the side, while preserving only the artwork visible on the corresponding referenced garment surface. The background is an extremely clean, solid-colored wall in a minimalist, stylish party setting, high-end commercial campaign vibe, 35mm film grain."
       },
       {
         id: 'shot_pov', order: 5, title: '第一人称视角（高度纪实抓拍）',
@@ -41,5 +42,5 @@ export const createDefaultPromptStyles = (): PromptStyle[] => {
     ],
     createdAt: now,
     updatedAt: now
-  }, ...createDocumentPromptStyles()]
+  }, ...createDocumentPromptStyles()].map(normalizePromptStyle)
 }

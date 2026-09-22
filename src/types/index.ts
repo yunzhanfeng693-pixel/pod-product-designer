@@ -46,3 +46,11 @@ export interface CompositeState {
   designRotation: number
   savePath: string
 }
+
+export interface SavedModelReference {
+  id: string
+  name: string
+  gender: 'male' | 'female' | ''
+  imageData: string
+  createdAt: string
+}

@@ -183,10 +183,10 @@ const Toolbar = () => {
         <button
           onClick={() => setShowPromptBatch(true)}
           className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors font-medium disabled:bg-gray-300 disabled:cursor-not-allowed"
-          title={!selectedShirt ? '请先选择基板' : '创建批量裂变生图任务包'}
+          title={!selectedShirt ? '请先选择基板' : '一键生成模特图'}
         >
           <Sparkles className="w-5 h-5" />
-          批量裂变
+          一键生成模特图
         </button>
 
         <DataBackup />

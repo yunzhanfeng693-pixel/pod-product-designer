@@ -1,6 +1,6 @@
 {
   "name": "x-team-tshirt-designer",
-  "version": "1.1.2",
+  "version": "1.1.4",
   "description": "POD产品设计器",
   "author": "lufan",
   "license": "MIT",
@@ -54,7 +54,8 @@
     "files": [
       "dist/**/*",
       "electron/**/*",
-      "node_modules/**/*"
+      "node_modules/**/*",
+      "!electron/gpt-relay/**/*"
     ],
     "win": {
       "target": [

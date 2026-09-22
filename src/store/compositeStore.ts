@@ -1,6 +1,7 @@
+import { normalizePromptStyle } from '@/utils/promptStyleNormalization'
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import { Shirt, Design, Position, PromptStyle } from '@/types'
+import { Shirt, Design, Position, PromptStyle, SavedModelReference } from '@/types'
 import { createDefaultPromptStyles } from '@/data/defaultPromptStyles'
 import { indexedDBStorage } from './dbStorage'
 import { bundledCategories, bundledColors, bundledShirts } from '@/data/bundledData'
@@ -35,6 +36,7 @@ interface CompositeStore {
   categories: Category[]
   colors: ColorOption[]
   promptStyles: PromptStyle[]
+  modelReferences: SavedModelReference[]
   setSelectedShirt: (shirt: Shirt | null) => void
   setFrontDesign: (design: Design | null) => void
   setBackDesign: (design: Design | null) => void
@@ -61,6 +63,8 @@ interface CompositeStore {
   duplicatePromptStyle: (styleId: string) => string | null
   removePromptStyle: (styleId: string) => void
   resetPromptStyles: () => void
+  addModelReference: (reference: Omit<SavedModelReference, 'id' | 'createdAt'>) => string
+  removeModelReference: (id: string) => void
 }
 
 const defaultCategories: Category[] = bundledCategories
@@ -145,6 +149,7 @@ export const useCompositeStore = create<CompositeStore>()(
       categories: defaultCategories,
       colors: defaultColors,
       promptStyles: createDefaultPromptStyles(),
+      modelReferences: [],
 
       setSelectedShirt: (shirt) => set({ selectedShirt: shirt }),
       setFrontDesign: (design) => {
@@ -282,6 +287,14 @@ export const useCompositeStore = create<CompositeStore>()(
         promptStyles: state.promptStyles.filter(style => style.id !== styleId)
       })),
       resetPromptStyles: () => set({ promptStyles: createDefaultPromptStyles() }),
+      addModelReference: (reference) => {
+        const existing = get().modelReferences.find(item => item.imageData === reference.imageData)
+        if (existing) return existing.id
+        const id = `model_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+        set((state) => ({ modelReferences: [{ ...reference, id, createdAt: new Date().toISOString() }, ...state.modelReferences] }))
+        return id
+      },
+      removeModelReference: (id) => set((state) => ({ modelReferences: state.modelReferences.filter(reference => reference.id !== id) })),
       addCategory: (name) => set((state) => ({
         categories: [...state.categories, { id: 'cat_' + Date.now(), name }]
       })),
@@ -328,10 +341,11 @@ export const useCompositeStore = create<CompositeStore>()(
     {
       name: 'product-composite-storage',
       storage: createJSONStorage(() => indexedDBStorage),
-      version: 2,
+      version: 4,
       migrate: (persistedState: unknown) => {
         const persisted = (persistedState ?? {}) as Partial<CompositeStore>
         const existingStyles = Array.isArray(persisted.promptStyles) ? persisted.promptStyles : []
+        const modelReferences = Array.isArray(persisted.modelReferences) ? persisted.modelReferences : []
         const existingShirts = Array.isArray(persisted.shirts) ? persisted.shirts : []
         const existingCategories = Array.isArray(persisted.categories) ? persisted.categories : []
         const existingColors = Array.isArray(persisted.colors) ? persisted.colors : []
@@ -349,7 +363,8 @@ export const useCompositeStore = create<CompositeStore>()(
         )
         return {
           ...persisted,
-          promptStyles: [...existingStyles, ...missingDefaults],
+          promptStyles: [...existingStyles, ...missingDefaults].map(normalizePromptStyle),
+          modelReferences,
           shirts: [...existingShirts, ...missingShirts],
           categories: [...existingCategories, ...missingCategories],
           colors: [...existingColors, ...missingColors]
@@ -361,6 +376,7 @@ export const useCompositeStore = create<CompositeStore>()(
         categories: state.categories,
         colors: state.colors,
         promptStyles: state.promptStyles,
+        modelReferences: state.modelReferences,
         frontDesign: state.frontDesign,
         backDesign: state.backDesign,
         frontTransform: state.frontTransform,

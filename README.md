@@ -5,10 +5,19 @@ POD产品设计器是一款用于制作服装产品效果图的本地工具。�
 作者：lufan  
 许可证：MIT
 
+## Windows 安装版（1.1.4）
+
+双击 `POD产品设计器 Setup 1.1.4.exe` 完成安装，再从桌面或开始菜单启动。安装版无需另装 Node.js；自动生图需要本机安装 Chrome 或 Edge，并在首次打开的豆包专用窗口完成登录。
+
+源码桌面版使用 `Start-POD-Desktop.cmd` 或 `npm run desktop` 启动。“一键生成模特图”支持选择产品衣面、模特参考图、提示词风格及保存路径；任务进度在右侧查看。浏览器预览可使用手动复制图片与关键词。
+
+打包命令：`npm run electron:build -- --publish never`。Windows 打包目前从 `C:\Program Files\nodejs\node.exe` 复制 Node 运行时，请在该位置安装 Node.js 20 或更高版本。
+
+版本更新见 [CHANGELOG.md](CHANGELOG.md)。
 ## 运行环境
 
 - Windows 10 或 Windows 11
-- Node.js 18 或更高版本
+- 源码运行：Node.js 20 或更高版本；EXE 安装版已内置运行时
 - 推荐使用 Chrome 或 Edge 浏览器
 
 ## 安装和启动

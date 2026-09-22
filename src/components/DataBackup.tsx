@@ -82,16 +82,21 @@ const DataBackup = () => {
         ...state.backDesign,
         imageData: await writeImage(state.backDesign.imageData, 'design-back', imagesDir)
       } : null
+      const modelReferences = await Promise.all(state.modelReferences.map(async reference => ({
+        ...reference,
+        imageData: await writeImage(reference.imageData, `model-${reference.id}`, imagesDir)
+      })))
 
       const manifest = {
         format: 'pod-product-designer-backup',
-        version: 2,
+        version: 3,
         exportedAt: new Date().toISOString(),
         data: {
           shirts,
           categories: state.categories,
           colors: state.colors,
           promptStyles: state.promptStyles,
+          modelReferences,
           frontDesign,
           backDesign,
           frontTransform: state.frontTransform,
@@ -146,6 +151,10 @@ const DataBackup = () => {
         ...data.backDesign,
         imageData: await readImage(data.backDesign.imageData, backupDir)
       } : null
+      const modelReferences = await Promise.all((Array.isArray(data.modelReferences) ? data.modelReferences : []).map(async (reference: any) => ({
+        ...reference,
+        imageData: await readImage(reference.imageData, backupDir)
+      })))
       const selectedShirt = shirts.find((shirt: any) => shirt.id === data.selectedShirtId) ?? null
 
       useCompositeStore.setState({
@@ -153,6 +162,7 @@ const DataBackup = () => {
         categories: data.categories,
         colors: data.colors,
         promptStyles: Array.isArray(data.promptStyles) ? data.promptStyles : createDefaultPromptStyles(),
+        modelReferences,
         frontDesign,
         backDesign,
         frontTransform: data.frontTransform,
